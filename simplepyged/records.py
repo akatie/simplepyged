@@ -180,6 +180,10 @@ class Source(Record):
     pass
 
 
+class Submission(Record):
+    pass
+
+
 class Submitter(Record):
     pass
 
@@ -196,31 +200,56 @@ class Individual(Record):
 
     def _init(self):
         """ Implementing Line._init() """
-        self._parent_family = self.get_parent_family()
+        self._parent_families = self.get_parent_families()
         self._families = self.get_families()
 
         self.birth_events = self._parse_generic_event_list("BIRT")
         self.death_events = self._parse_generic_event_list("DEAT")
+        self.other_events = []
+        for event_type in ["ADOP", "BAPM", "BARM", "BASM", "BLES", "BURI",
+                           "CENS", "CHR", "CHRA", "CONF", "CREM", "EMIG",
+                           "FCOM", "GRAD", "IMMI", "NATU", "ORDN", "RETI",
+                           "PROB", "WILL", "EVEN"]:
+            self.other_events.extend(self._parse_generic_event_list(event_type))
 
     def sex(self):
-        """ Returns 'M' for males, 'F' for females """
-        return self.children_tags("SEX")[0].value()
+        """ Returns 'M' for males, 'F' for females, or None if not specified """
+        try:
+            return self.children_tags("SEX")[0].value()
+        except IndexError:
+            return None
 
-    def parent_family(self):
-        return self._parent_family
+    def parent_families(self):
+        return self._parent_families
 
     def families(self):
         return self._families
 
     def father(self):
-        if self.parent_family() != None:
-            if self.parent_family().husband() != None:
-                return self.parent_family().husband()
+        """Returns a father as an Individual object. If person has multiple fathers, returns a list of Individual objects. """
+        fathers = []
+
+        for family in self.parent_families():
+            if family.husband() != None:
+                fathers.append(family.husband())
+
+        if len(fathers) == 1:
+            return fathers[0]
+
+        return fathers
 
     def mother(self):
-        if self.parent_family() != None:
-            if self.parent_family().wife() != None:
-                return self.parent_family().wife()
+        """Returns a mother as an Individual object. If person has multiple mothers, returns a list of Individual objects. """
+        mothers = []
+
+        for family in self.parent_families():
+            if family.wife() != None:
+                mothers.append(family.wife())
+
+        if len(mothers) == 1:
+            return mothers[0]
+
+        return mothers
 
     def children(self):
         retval = []
@@ -235,17 +264,9 @@ class Individual(Record):
         """ Return a list of all of the family records of a person. """
         return self.children_tag_records("FAMS")
 
-    def get_parent_family(self):
-        """ Return a family record in which this individual is a child. """
-        famc = self.children_tag_records("FAMC")
-        
-        if len(famc) > 1:
-            raise Exception('Individual has multiple parent families.')
-
-        if len(famc) == 0:
-            return None
-        
-        return famc[0]
+    def get_parent_families(self):
+        """ Return a list of all of the family records in which this individual is a child. (adopted children can have multiple parent families)"""
+        return self.children_tag_records("FAMC")
     
     def name(self):
         """ Return a person's names as a tuple: (first,last) """
@@ -258,7 +279,7 @@ class Individual(Record):
                 if e.value() != "":
                     name = string.split(e.value(),'/')
                     first = string.strip(name[0])
-                    last = string.strip(name[1])
+                    last = string.strip(name[1]) if len(name) > 1 else None
                 else:
                     for c in e.children_lines():
                         if c.tag() == "GIVN":
@@ -374,11 +395,10 @@ class Individual(Record):
     def parents(self):
         """ Return list of parents of this Individual """
 
-        if self.parent_family() is None:
-            return []
+        parent_pairs = map(lambda x: x.parents(), self.parent_families())
 
-        return self.parent_family().parents()
-    
+        return [parent for parent_pair in parent_pairs for parent in parent_pair]   
+
     def common_ancestor(self, relative):
         """ Find a common ancestor with a relative """
 
@@ -417,9 +437,25 @@ class Individual(Record):
 
         return None
 
+    def mutual_families(self, candidate):
+        """Return mutual families of self and candidate. """
+        mutual_families = []
+
+        for my_family in self.parent_families():
+            if my_family in candidate.parent_families():
+                mutual_families.append(my_family)
+                
+
+    def is_parent(self, candidate):
+        """ Determine if candidate is parent of self """
+        if candidate in self.parents():
+            return True
+
+        return False
+        
     def is_sibling(self, candidate):
         """ Determine if candidate is sibling of self """
-        if self.parent_family() == candidate.parent_family():
+        if self.mutual_families(candidate):
             return True
 
         return False
@@ -497,7 +533,7 @@ class Individual(Record):
             return []
 
         if relative in self.parents():
-            return [[self, 'parent'], [relative, '']]
+            return [[self, 'start'], [relative, 'parent']]
         
         common_ancestor = self.common_ancestor(relative)
 
@@ -573,7 +609,10 @@ class Family(Record):
             self._children = []
 
         self.marriage_events = self._parse_generic_event_list("MARR")
-
+        self.other_events = []
+        for event_type in ["ANUL", "CENS", "DIV", "DIVF", "ENGA", "MARB",
+                           "MARC", "MARL", "MARS", "EVEN"]:
+            self.other_events.extend(self._parse_generic_event_list(event_type))
 
     def husband(self):
         """ Return husband this family """

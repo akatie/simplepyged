@@ -27,8 +27,8 @@ class McIntyreTest(unittest.TestCase):
         self.assertEqual(mary.deceased(), False)
         self.assertEqual(mary.death(), None)
            
-        self.assertEqual(mary.parent_family().xref(), '@F5@')
-        self.assertEqual(mary.parent_family().husband().xref(), '@P405368888@')
+        self.assertEqual(map(lambda x: x.xref(), mary.parent_families()), ['@F5@'])
+        self.assertEqual(map(lambda x: x.husband().xref(), mary.parent_families()), ['@P405368888@'])
         self.assertEqual(mary.father().xref(), '@P405368888@')
         self.assertEqual(mary.mother().xref(), '@P405538002@')
         self.assertEqual(map(lambda x: x.xref(), mary.families()), ['@F4@'])
@@ -64,11 +64,39 @@ class McIntyreTest(unittest.TestCase):
         self.assertEqual(chris.distance_to_ancestor(mary), 3)
         self.assertEqual(map(lambda x: x.xref(), chris.down_path(mary, barbara, 1)), ['@P405366386@'])
         self.assertEqual(map(lambda x: x.xref(), chris.down_path(mary, chris, 3)), ['@P405366386@', '@P405342543@', '@P405313470@'])
-        self.assertEqual(map(lambda (x, y): (x.xref(), y), chris.path_to_relative(barbara)), [('@P405749335@', 'parent'), ('@P405313470@', 'parent'), ('@P405342543@', 'sibling'), ('@P407946950@', '')])
+
+        kimberly = self.g.get_individual('@P405313470@')
+        marsha = self.g.get_individual('@P405342543@')
+
+        self.assertTrue(marsha.is_relative(kimberly))
+        self.assertTrue(kimberly.is_relative(marsha))
+
+        self.assertFalse(marsha.is_parent(kimberly))
+        self.assertTrue(kimberly.is_parent(marsha))
+
+        self.assertFalse(marsha.is_sibling(kimberly))
+        self.assertFalse(kimberly.is_sibling(marsha))
+
+        self.assertFalse(marsha.is_parent(barbara))
+        self.assertFalse(barbara.is_parent(marsha))
+
+        self.assertTrue(marsha.is_sibling(barbara))
+        self.assertTrue(barbara.is_sibling(marsha))
+
+        self.assertEqual(map(lambda (x, y): (x.xref(), y), chris.path_to_relative(barbara)), [('@P405749335@', 'start'), ('@P405313470@', 'parent'), ('@P405342543@', 'parent'), ('@P407946950@', 'sibling')])
         
-        self.assertEqual(map(lambda (x, y): (x.xref(), y), barbara.path_to_relative(chris)), [('@P407946950@', 'sibling'), ('@P405342543@', 'child'), ('@P405313470@', 'child'), ('@P405749335@', '')])
+        self.assertEqual(map(lambda (x, y): (x.xref(), y), barbara.path_to_relative(chris)), [('@P407946950@', 'start'), ('@P405342543@', 'sibling'), ('@P405313470@', 'child'), ('@P405749335@', 'child')])
 
+    def test_spaces(self):
+        """Testing indenting spaces"""
+        ernest = self.g.get_individual('@P405362004@')
 
+        self.assertEqual(ernest.type(), 'Individual')
+
+        notes = ernest.children_tags('NOTE')
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0].value(), '    Ma and Papa')
+       
 class WrightTest(unittest.TestCase):
     """Unit tests for records.py using wright.ged."""
 
@@ -90,7 +118,7 @@ class WrightTest(unittest.TestCase):
         self.assertEqual(delores.deceased(), False)
         self.assertEqual(delores.death(), None)
            
-        self.assertEqual(delores.parent_family().xref(), '@F159@')
+        self.assertEqual(map(lambda x: x.xref(), delores.parent_families()), ['@F159@'])
         self.assertEqual(map(lambda x: x.xref(), delores.families()), ['@F295@'])
         self.assertEqual(delores in delores.father().children(), True)
 
